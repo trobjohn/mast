@@ -1,1 +1,1 @@
-# mast: Machine learning and Statistics analysis
+# mast: (Ma)chine learning and (St)atistical analysis
