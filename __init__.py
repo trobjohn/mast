@@ -1,1 +1,1 @@
-#__all__ = ["name"]
+__all__ = ['lm','logit','probit','nn','kde']

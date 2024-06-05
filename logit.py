@@ -10,15 +10,20 @@ class Logit:
         check_x = np.isnan(x)
         check_y = np.isnan(y)
         keep_row = ( (np.sum(check_x,axis=1)+check_y) == 0)
-        NAs = np.sum(keep_row)
         n = len(y)
-        if NAs<len(y) :
+        NAs = n - np.sum(keep_row)
+        if NAs>0 :
+            self.keep_row = keep_row
+            self.x = x.loc[keep_row,:].to_numpy()
+            self.y = y[keep_row].to_numpy()
             print(f'Due to missing values, {NAs} observations out of {n} were dropped.')
-            self.x = x.loc[keep_row,:]
-            self.y = y[keep_row]
         else:
-            self.x = x
-            self.y = y
+            self.keep_row = None
+            self.x = x.to_numpy()
+            self.y = y.to_numpy()
+        #
+        self.depvar = y.name
+        self.vars = x.columns
         #
         self.n = len(self.y)
         self.include_intercept = include_intercept
@@ -26,9 +31,10 @@ class Logit:
         #
         self.n = (self.x).shape[0]
         if self.include_intercept is True:
-            self.x['Intercept'] = np.ones(self.n)
+            #self.x.loc[:,'Intercept'] = np.ones(self.n)
+            self.x = np.append(self.x, np.ones( (self.n,1) ),axis=1)
+            self.vars = np.append(self.vars,'Intercept')
         self.k = self.x.shape[1]
-        self.vars = (self.x).columns
         #
         self.mem = None
         self.ame = None
@@ -40,8 +46,6 @@ class Logit:
         self.se = None
         self.pval = None
         self.t_stat = None
-        #
-        self.depvar = y.name
         #
         self.latent = None
         self.y_hat = None
@@ -71,7 +75,7 @@ class Logit:
         #
         return LL, gr, H, jac
 
-    def solve_gd(self,eps=1e-8,max_itr=500):
+    def solve_gd(self,eps=1e-7,max_itr=750):
         """ Estimate beta by gradient descent. """
         err = 10
         eta = .01
@@ -86,11 +90,11 @@ class Logit:
                 eta = num/den
             beta_p1 = beta + eta*gr
             err = np.sqrt(np.sum(gr**2))
-            print(f"Error for iteration {itr} is {err}")
             itr = itr+1
             beta_m1 = np.copy(beta)
             beta = np.copy(beta_p1)
             gr_m1 = np.copy(gr)
+        print(f"Final error for iteration {itr} is {err}")
         self.beta = beta
         self.latent = self.x @ self.beta
         self.y_hat = self.F_logit(self.latent)
@@ -103,6 +107,7 @@ class Logit:
             self.vcv = np.linalg.inv(-H)
             self.se = np.sqrt(np.diag(self.vcv))
         elif se_type == 'robust':
+            print('Robust standard errors')
             meat = jac @ jac.T #jac @ np.ones((self.n,self.n)) @ jac.T # suspect
             bread = np.linalg.inv(-H)
             self.vcv = bread @ meat @ bread

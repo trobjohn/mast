@@ -12,15 +12,20 @@ class Probit:
         check_x = np.isnan(x)
         check_y = np.isnan(y)
         keep_row = ( (np.sum(check_x,axis=1)+check_y) == 0)
-        NAs = np.sum(keep_row)
         n = len(y)
-        if NAs<len(y) :
+        NAs = n - np.sum(keep_row)
+        if NAs>0 :
+            self.keep_row = keep_row
+            self.x = x.loc[keep_row,:].to_numpy()
+            self.y = y[keep_row].to_numpy()
             print(f'Due to missing values, {NAs} observations out of {n} were dropped.')
-            self.x = x.loc[keep_row,:]
-            self.y = y[keep_row]
         else:
-            self.x = x
-            self.y = y
+            self.keep_row = None
+            self.x = x.to_numpy()
+            self.y = y.to_numpy()
+        #   
+        self.depvar = y.name
+        self.vars = x.columns
         #
         self.n = len(self.y)
         self.include_intercept = include_intercept
@@ -28,9 +33,10 @@ class Probit:
         #
         self.n = (self.x).shape[0]
         if self.include_intercept is True:
-            self.x['Intercept'] = np.ones(self.n)
+            #self.x.loc[:,'Intercept'] = np.ones(self.n)
+            self.x = np.append(self.x, np.ones( (self.n,1) ),axis=1)
+            self.vars = np.append(self.vars,'Intercept') 
         self.k = self.x.shape[1]
-        self.vars = (self.x).columns
         #
         self.mem = None
         self.ame = None
@@ -42,8 +48,6 @@ class Probit:
         self.se = None
         self.pval = None
         self.t_stat = None
-        #
-        self.depvar = y.name
         #
         self.latent = None
         self.y_hat = None
@@ -62,7 +66,7 @@ class Probit:
     
     def mills(self,z):
         """ Mills ratio for standard normal. """
-        eps = 0
+        eps = 1e-10
         den = eps+self.F(z)
         num = self.f(z)
         #r = np.zeros(len(z))
@@ -73,13 +77,14 @@ class Probit:
         return r
 
     def eval(self,beta,hessian=False):
+        delta = 1e-50
         latent = self.x@beta
         F_1 = self.F(latent)
         F_0 = self.F(-latent)
         mills_1 = self.mills(latent)
         mills_0 = self.mills(-latent)
         # Log likelihood:
-        LL = np.sum( self.y*np.log(F_1) + (1-self.y)*np.log(F_0) )/self.n
+        LL = np.sum( self.y*np.log(F_1+delta) + (1-self.y)*np.log(F_0+delta) )/self.n
         # Gradient:
         gr = self.x.T @ ( self.y*mills_1 - (1-self.y)*mills_0 )/self.n
         # Hessian:
@@ -127,6 +132,7 @@ class Probit:
             self.vcv = np.linalg.inv(-H)
             self.se = np.sqrt(np.diag(self.vcv))
         elif se_type == 'robust':
+            print('Robust standard errors')
             meat = jac @ jac.T #jac @ np.ones((self.n,self.n)) @ jac.T # suspect
             bread = np.linalg.inv(-H)
             self.vcv = bread @ meat @ bread
@@ -136,6 +142,7 @@ class Probit:
         """ Print regression output. """
         self.t_stat = self.beta/self.se
         self.pval = 2*(t_dist.cdf(-abs(self.t_stat), self.n-self.k))
+        #
         nstars = np.zeros(len(self.pval))
         nstars[ self.pval <= .01 ] = 3
         nstars[ (self.pval > .01) * (self.pval <= .05) ] = 2

@@ -93,7 +93,7 @@ class KDensity:
         self.h_lscv = h_grid[min_index][0]
         return grid_points, sse
 
-    def lcv(self, grid_points = 100, h_lb = None, h_ub = None):
+    def lcv(self, grid_points = 50, h_lb = None, h_ub = None):
         """ Perform likelihood cross validation. """
         if h_lb is None:
             h_lb = self.h_min

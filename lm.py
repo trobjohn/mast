@@ -10,27 +10,34 @@ class LM:
         check_x = np.isnan(x)
         check_y = np.isnan(y)
         keep_row = ( (np.sum(check_x,axis=1)+check_y) == 0)
-        NAs = np.sum(keep_row)
         n = len(y)
-        if NAs<len(y) :
-            print(f'Due to missing values, {NAs} observations out of {n} were dropped.')
-            x = x.loc[keep_row,:]
-            y = y[keep_row]
+        NAs = n - np.sum(keep_row)
+        if NAs>0 :
+            self.keep_row = keep_row
+            self.x = x.loc[keep_row,:].to_numpy()
+            self.y = y[keep_row].to_numpy()
+            print(f'Due to missing values, {NAs} observations out of {n} were dropped. \n')
         else:
-            self.x = x
-            self.y = y
+            self.keep_row = None
+            self.x = x.to_numpy()
+            self.y = y.to_numpy()
         #   
+        self.depvar = y.name
+        self.vars = x.columns
+        #
         self.n = len(self.y)
         self.include_intercept = include_intercept
         self.se_type = 'standard'
         #
         self.n = (self.x).shape[0]
         if self.include_intercept is True:
-            self.x['Intercept'] = np.ones(self.n)
+            #self.x.loc[:,'Intercept'] = np.ones(self.n)
+            self.x = np.append(self.x, np.ones( (self.n,1) ),axis=1)
+            self.vars = np.append(self.vars,'Intercept')
         self.k = self.x.shape[1]
-        self.vars = (self.x).columns
+        
         #
-        self.xPx = self.x.T @ self.x    
+        self.xPx = (self.x.T @ self.x )
         #
         self.residuals = None
         self.sse = None
@@ -46,7 +53,6 @@ class LM:
         self.pval = None
         self.t_stat = None
         #
-        self.depvar = y.name
         self.output = None
 
     def z_norm(self,w):
@@ -92,7 +98,7 @@ class LM:
             beta_m1 = np.copy(beta)
             beta = np.copy(beta_p1)
             gr_m1 = np.copy(gr)
-        #print('Final error was:', err)
+        print(f"Final error for iteration {itr} is {err}")
         self.beta = beta
                 #
         y_hat = self.x @ self.beta # Compute predictions
@@ -118,14 +124,15 @@ class LM:
             self.vcv = bread @ meat @ bread * (self.n/(self.n-self.k))
             self.se = np.sqrt(np.diag(self.vcv))
         elif self.se_type == 'cluster-robust':
-            print('Cluster-robust standard errors')
+            if not self.keep_row is None:
+                cluster_var = cluster_var.loc[self.keep_row]
             cluster_groups = cluster_var.unique().tolist()
             G = len(cluster_groups)
             #
             meat = np.empty((self.k,self.k))
             for g in range(G): # Cycle through G clusters
-                select = (cluster_var == cluster_groups[g])
-                x_g = self.x.loc[select,:]
+                select = (cluster_var == cluster_groups[g]) #####
+                x_g = self.x[select,:]
                 u_g = self.residuals[select]
                 meat = meat + np.outer( (x_g.T @ u_g), (x_g.T @ u_g) )
             bread = np.linalg.inv(self.xPx)
@@ -164,8 +171,10 @@ class LM:
         if se_type == 'standard':
             self.compute_se(se_type)
         elif se_type == 'robust':
+            print('Robust standard errors')
             self.compute_se(se_type)
         elif se_type == 'cluster-robust':
+            print('Cluster-robust standard errors')
             self.compute_se(se_type,cluster_var)
         #
         self.output = self.summary()

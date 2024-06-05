@@ -12,15 +12,20 @@ class NN:
         check_x = np.isnan(x)
         check_y = np.isnan(y)
         keep_row = ( (np.sum(check_x,axis=1)+check_y) == 0)
-        NAs = np.sum(keep_row)
         n = len(y)
-        if NAs<len(y) :
-            print(f'Due to missing values, {NAs} observations of {n} were dropped.')
-            self.x = x.loc[keep_row,:]
-            self.y = y[keep_row]
+        NAs = n - np.sum(keep_row)
+        if NAs>0 :
+            self.keep_row = keep_row
+            self.x = x.loc[keep_row,:].to_numpy()
+            self.y = y[keep_row].to_numpy()
+            print(f'Due to missing values, {NAs} observations out of {n} were dropped.')
         else:
-            self.x = x
-            self.y = y
+            self.keep_row = None
+            self.x = x.to_numpy()
+            self.y = y.to_numpy()
+        #
+        self.depvar = y.name
+        self.vars = x.columns
         #
         self.n = len(self.y)
         self.l = x.shape[1]
@@ -35,7 +40,7 @@ class NN:
         #
         self.x_min = self.x.min().tolist()
         self.x_max = self.x.max().tolist()
-        self.u = self.x.apply(self.maxmin_norm)
+        self.u = self.normalize(self.x)
         #
         self.y_hat = None
         self.y_new = None
@@ -60,8 +65,8 @@ class NN:
         
     def sq_dist(self,X,Z):
         """ Compute squared distance matrix from X to Z. """
-        X = X.to_numpy()
-        Z = Z.to_numpy()
+        #X = X.to_numpy()
+        #Z = Z.to_numpy()
         Xsq = np.sum(X**2,axis=1)
         Zsq = np.sum( Z**2,axis=1).T
         X_mat = np.tile(Xsq,(Zsq.shape[0],1)).T
@@ -73,8 +78,6 @@ class NN:
     def k_by_cv_reg(self,k_max=None, n_folds =10, k_steps = None):
         """ Pick K by cross validation on training data. """
         k_min = 3
-        if k_max is None:
-            k_max = min( 2*int( np.floor( np.sqrt( self.x.shape[0] ) ) ), self.n )
         if k_steps is None:
             k_steps = int(np.floor(np.sqrt(k_max - k_min)))
             print('Number of steps for k: ', k_steps)
@@ -87,17 +90,17 @@ class NN:
         folds, cv_grid = self.create_folds(self.n,n_folds)
         ## Compute RMSE for fold k:
         score_rmse = np.reshape(np.zeros( len(k_nn_grid)*len(cv_grid) ),(len(k_nn_grid),len(cv_grid)))
-        ## Cross-validate
-        for k_nn_index in range(L_nn):
-            k_nn = k_nn_grid[k_nn_index]
-            for k_cv in cv_grid:
+        ## Cross-validate :: Vectorize these calculations
+        for k_cv in cv_grid:
+            for k_nn_index in range(L_nn):
+                k_nn = k_nn_grid[k_nn_index]
                 # Get data for this fold:
-                u_nk = self.u.drop(folds[:,k_cv],axis=0)
-                y_nk = self.y.drop(folds[:,k_cv],axis=0)
-                u_k = self.u.iloc[folds[:,k_cv],:]
-                y_k = self.y[folds[:,k_cv]]
+                u_nk = np.delete( self.u, folds[:,k_cv].astype(int), axis=0)
+                y_nk = np.delete( self.y, folds[:,k_cv].astype(int),axis=0)
+                u_k = self.u[folds[:,k_cv].astype(int),:]
+                y_k = self.y[folds[:,k_cv].astype(int)]
                 # Make prediction:
-                y_k_hat = ( np.argsort(np.argsort( self.sq_dist(u_k,u_nk), axis=1 ) , axis=1)< (k_nn) ) @ y_nk/(k_nn)
+                y_k_hat = ( np.argsort(np.argsort( self.sq_dist(u_k,u_nk), axis=1 ) , axis=1)<= (k_nn) ) @ y_nk/(k_nn) # This is expensive; just do it once?
                 # Compute and sore RMSE:
                 r_k = y_k_hat - y_k
                 score_rmse[k_nn_index, k_cv] = np.sqrt(r_k@r_k/self.n)
@@ -105,23 +108,22 @@ class NN:
         self.k = k_nn_grid[np.argmin(rmse)]
 
 
-    def normalize_new(self,x_new):
-        """ Normalize new values using training normalization parameters. """
-        u_new = self.x.copy().astype(dtype='float64')
-        for i in range(u_new.shape[1]):
-            x_convert = self.x.iloc[:,i].astype(dtype='float64')
-            u_new.iloc[:,i] = (x_convert-float(self.x_min[i]))/(float(self.x_max[i]) - float(self.x_min[i]))
+    def normalize(self,x_new):
+        """ Normalize values using training normalization parameters. """
+        x_new = x_new.copy().astype(dtype='float64') 
+        u_new = (x_new - self.x_min)/(self.x_max - self.x_min)
         return u_new
 
 
-    def predict_reg(self, x_new, k = None, y_test = None):
+    def predict_reg(self, x_new, y_test = None, k = None):
         """ Predict values for new cases. """
         if k is None:
             k = self.k
         # Transform x_new by way of x_train:
-        u_new = self.normalize_new(x_new)
+        u_new = self.normalize(x_new)
         # Regression prediction: 
-        y_new = ( np.argsort(np.argsort( self.sq_dist(u_new,self.u), axis=1 ) , axis=1)< k ) @ self.y/k
+        D = self.sq_dist(u_new, self.u)
+        y_new = ( np.argsort(np.argsort( D, axis=1 ) , axis=1)<= k ) @ self.y/k 
         self.y_new = y_new
         # If training outcomes available:
         if not (y_test is None) :
