@@ -7,8 +7,8 @@ class LM:
     def __init__(self,x,y,include_intercept=True):
         """ Initialize linear regression. """
         # Filter missings.
-        check_x = np.isnan(x)
-        check_y = np.isnan(y)
+        check_x = np.isnan(x.to_numpy())
+        check_y = np.isnan(y.to_numpy())
         keep_row = ( (np.sum(check_x,axis=1)+check_y) == 0)
         n = len(y)
         NAs = n - np.sum(keep_row)
