@@ -100,11 +100,11 @@ class Logit:
         self.latent = self.x @ self.beta
         self.y_hat = self.F_logit(self.latent)
 
-    def compute_se(self, se_type = 'standard'):
+    def compute_se(self, se_type = ''):
         """ Compute standard errors."""
         self.se_type = se_type
         LL, gr, H, jac = self.eval(self.beta,hessian=True)
-        if se_type == 'standard':
+        if se_type == '':
             self.vcv = np.linalg.inv(-H)
             self.se = np.sqrt(np.diag(self.vcv))
         elif se_type == 'robust':
@@ -149,7 +149,7 @@ class Logit:
         self.mem = f*self.beta
         
         
-    def run(self,se_type = 'standard'):
+    def run(self,se_type = ''):
         """ Run regression and print results. """
         self.solve_gd()
         self.compute_se(se_type)
