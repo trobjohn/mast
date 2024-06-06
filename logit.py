@@ -25,6 +25,7 @@ class Logit:
         self.depvar = y.name
         self.vars = x.columns
         #
+        self.ybar = np.mean(self.y)
         self.n = len(self.y)
         self.include_intercept = include_intercept
         self.se_type = 'standard'

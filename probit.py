@@ -28,6 +28,7 @@ class Probit:
         self.vars = x.columns
         #
         self.n = len(self.y)
+        self.ybar = np.mean(self.y)
         self.include_intercept = include_intercept
         self.se_type = 'standard'
         #

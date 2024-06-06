@@ -46,11 +46,14 @@ class LM:
         self.ser = None
         self.rsq = None
         self.se = None
+        self.ybar = np.mean(self.y)
         #
         self.beta = None
         self.vcv = None
         self.se = None
         self.pval = None
+        self.n_clusters = None
+        self.cluster_varname = None
         self.t_stat = None
         #
         self.output = None
@@ -104,9 +107,8 @@ class LM:
         y_hat = self.x @ self.beta # Compute predictions
         self.residuals = self.y-y_hat # Compute residuals
 
-    def compute_se(self, se_type='standard', cluster_var = None):
+    def compute_se(self, se_type='', cluster_var = None):
         """ Compute standard errors. Supports standard and robust. """
-        self.se_type = se_type
         self.sse =  np.inner(self.residuals,self.residuals) # Compute SSE
         self.mse = self.sse/self.n
         self.rmse = np.sqrt(self.mse)
@@ -114,20 +116,25 @@ class LM:
         tss = np.sum( ( self.y-np.mean(self.y) )**2 )
         self.rsq = 1 - self.sse/tss 
         #
-        if self.se_type == 'standard':
+        if se_type == '':
+            self.se_type = ''
             self.vcv = self.ser * np.linalg.inv(self.xPx)
             self.se = np.sqrt(np.diag(self.vcv))
-        elif self.se_type == 'robust':
+        elif se_type == 'robust':
+            self.se_type = 'Robust'
             e_sq = self.residuals**2
             bread = np.linalg.inv(self.xPx)
             meat = self.x.T @ np.diag(e_sq) @ self.x
             self.vcv = bread @ meat @ bread * (self.n/(self.n-self.k))
             self.se = np.sqrt(np.diag(self.vcv))
-        elif self.se_type == 'cluster-robust':
+        elif se_type == 'cluster-robust':
+            self.se_type = 'Cluster-Robust'
             if not self.keep_row is None:
                 cluster_var = cluster_var.loc[self.keep_row]
             cluster_groups = cluster_var.unique().tolist()
             G = len(cluster_groups)
+            self.n_clusters = G
+            self.cluster_varname = cluster_var.name
             #
             meat = np.empty((self.k,self.k))
             for g in range(G): # Cycle through G clusters
@@ -159,7 +166,7 @@ class LM:
         return output
     
     def run(self,
-            se_type = 'standard',
+            se_type = '',
             use_gr = False,
             cluster_var = None):
         """ Run regression and print results. """
@@ -168,7 +175,7 @@ class LM:
         else:
             self.solve_normal()
         #
-        if se_type == 'standard':
+        if se_type == '':
             self.compute_se(se_type)
         elif se_type == 'robust':
             print('Robust standard errors')
