@@ -157,9 +157,8 @@ class threeparttable:
             file.write('\\hline \n')
             file.write(se_type_row)
         if clstr_rbst == 1:
-            file.write(se_N_row)
             file.write(se_var_row)
-
+            file.write(se_N_row)
 
         stars_note = 'Stars denote: $^{*}$:$p<0.10$, $^{**}$:$p<0.05$, $^{***}$:$p<0.01$.'
 
