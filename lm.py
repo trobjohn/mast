@@ -6,10 +6,14 @@ class LM:
     """ Linear regression analysis kit. """
     def __init__(self,x,y,include_intercept=True):
         """ Initialize linear regression. """
+        # Detect vartype
+
+
+        
         # Filter missings.
-        check_x = np.isnan(x.to_numpy())
+        check_x = np.sum(np.isnan(x.to_numpy()),axis=1)
         check_y = np.isnan(y.to_numpy())
-        keep_row = ( (np.sum(check_x,axis=1)+check_y) == 0)
+        keep_row = ( (check_x+check_y) == 0)
         n = len(y)
         NAs = n - np.sum(keep_row)
         if NAs>0 :
@@ -82,14 +86,31 @@ class LM:
         self.rsq = 1 - self.sse/tss 
         self.residuals = self.y-y_hat # Compute residuals        
 
-    def solve_gd(self,eps=10e-5,max_itr=500):
+
+
+
+    def solve_gd(self,eps=1e-10,max_itr=500):
         """ Estimate beta by gradient descent. """
         err = 10
         eta = .01
-        beta = np.ones(self.k)
+        beta = (1/self.k)*np.ones(self.k)
         itr = 0
+        #
+        ## Transform data:
+        mu_x = np.mean(self.x,axis=0)
+        sigma_x = np.sqrt( np.var(self.x,axis=0))
+        intercept = np.where(sigma_x == 0 )
+        if len(intercept)>1 :
+            print('Warning: More than one regression variable is constant.')
+        m_x = mu_x.copy()
+        s_x = sigma_x.copy()
+        m_x[intercept] = 0
+        s_x[intercept] = 1
+        z = (self.x-m_x)/s_x
+        #
+        ## Gradient descent:
         while err>eps and itr < max_itr:
-            gr = -self.x.T @ ( self.y - self.x @ beta)/self.n
+            gr = -z.T @ ( self.y - z @ beta)/self.n
             if itr>0:
                 num = np.abs( np.inner(beta - beta_m1, gr - gr_m1))
                 den = np.sum( (gr-gr_m1)**2 )
@@ -102,10 +123,36 @@ class LM:
             beta = np.copy(beta_p1)
             gr_m1 = np.copy(gr)
         print(f"Final error for iteration {itr} is {err}")
-        self.beta = beta
-                #
+        #
+        # Rescale coef:
+        beta_star = beta.copy()
+        selector = np.delete( range(len(mu_x)), intercept)
+        beta_star[selector] = beta_star[selector]/sigma_x[selector]
+        beta_star[intercept] = beta_star[intercept] - np.sum( beta[selector]*mu_x[selector]/sigma_x[selector])
+        self.beta = beta_star
+        #
+        # Set final values
         y_hat = self.x @ self.beta # Compute predictions
         self.residuals = self.y-y_hat # Compute residuals
+
+
+    def make_dummies(self,x_cat):
+        """ Make dummy variables from categorical variables. """
+        dummies = []
+        labels = []
+
+        for k in range(x_cat.shape[1]):
+            lab_k,lev_k = np.unique(x_cat.iloc[:,k],return_inverse=True)
+            dum_k = np.eye(len(lab_k))[lev_k]
+            dummies.append(dum_k)
+            labels.append( [x_cat.columns[k] +'_'+str(arr) for arr in lab_k ])
+        dummies = np.concatenate(dummies,axis=1)
+        labels = np.concatenate(labels)
+        return dummies, labels
+
+
+
+
 
     def compute_se(self, se_type='', cluster_var = None):
         """ Compute standard errors. Supports standard and robust. """
@@ -146,7 +193,7 @@ class LM:
             self.vcv = bread @ meat @ bread * ( (G/(G-1)) * (self.n-1)/(self.n-self.k))
             self.se = np.sqrt(np.diag(self.vcv))
 
-    def summary(self):
+    def summary(self,digits=4):
         """ Print regression output. """
         self.t_stat = self.beta/self.se
         self.pval = 2*(t_dist.cdf(-abs(self.t_stat), self.n-self.k))
@@ -156,13 +203,14 @@ class LM:
         nstars[ (self.pval > .05) * (self.pval <= .10) ] = 1
         stars = ['*'*int(i) for i in nstars]
         #
-        output = pd.DataFrame({'Variable':self.vars,
-                            'Coefficient':self.beta,
+        output = pd.DataFrame({'Var':self.vars,
+                            'Coef.':self.beta,
                             'Std.Err':self.se,
-                            't-Statistic':self.t_stat,
-                            'p-Value': self.pval,
-                            'Significance': stars
+                            't-Stat.':self.t_stat,
+                            'p-Val': self.pval,
+                            'Stars': stars
                             })
+        output = output.round(decimals=digits)
         return output
     
     def run(self,
