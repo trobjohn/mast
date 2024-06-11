@@ -4,12 +4,21 @@ from scipy.stats import t as t_dist
 
 class LM:
     """ Linear regression analysis kit. """
-    def __init__(self,x,y,include_intercept=True):
+    def __init__(self,x,y,
+                 x_cat = None,
+                 include_intercept=True):
         """ Initialize linear regression. """
         # Detect vartype
+        self.var_types = x.dtypes
 
-
+        # Create x_cat dummies and add to x
+        if x_cat is None:
+            self.vars_cat = None
+        else:
+            dummies, labels = self.make_dummies(x_cat)
         
+        x = pd.concat([x,pd.DataFrame(data=dummies,columns=labels)],axis=1)
+
         # Filter missings.
         check_x = np.sum(np.isnan(x.to_numpy()),axis=1)
         check_y = np.isnan(y.to_numpy())
@@ -39,7 +48,6 @@ class LM:
             self.x = np.append(self.x, np.ones( (self.n,1) ),axis=1)
             self.vars = np.append(self.vars,'Intercept')
         self.k = self.x.shape[1]
-        
         #
         self.xPx = (self.x.T @ self.x )
         #
@@ -62,6 +70,7 @@ class LM:
         #
         self.output = None
 
+
     def z_norm(self,w):
         """ z-Score normalize a vector w. """ 
         r = w - np.mean(w)
@@ -69,12 +78,34 @@ class LM:
         z = r/s
         return z 
 
+
     def solve_normal(self):
         """ Estimate beta by solving normal equations. """ 
-        # Run regression
-        xPy = self.x.T @ self.y # Compute X'y
-        self.beta = np.linalg.solve( self.xPx, xPy) # Solve normal equations
+        ## z-Transform data:
+        mu_x = np.mean(self.x,axis=0)
+        sigma_x = np.sqrt( np.var(self.x,axis=0))
+        intercept = np.where(sigma_x == 0 )
+        if len(intercept)>1 :
+            print('Warning: More than one regression variable is constant.')
+        m_x = mu_x.copy()
+        s_x = sigma_x.copy()
+        m_x[intercept] = 0
+        s_x[intercept] = 1
+        z = (self.x-m_x)/s_x
         #
+        # Run regression:
+        zPy = z.T @ self.y # Compute X'y
+        zPz = z.T @ z
+        beta = np.linalg.solve( zPz, zPy) # Solve normal equations
+        #
+        # Transform coefficients:
+        beta_star = beta.copy()
+        selector = np.delete( range(len(mu_x)), intercept)
+        beta_star[selector] = beta_star[selector]/sigma_x[selector]
+        beta_star[intercept] = beta_star[intercept] - np.sum( beta[selector]*mu_x[selector]/sigma_x[selector])
+        self.beta = beta_star
+        #
+        # Results:
         y_hat = self.x @ self.beta # Compute predictions
         residuals = self.y-y_hat # Compute residuals
         #
@@ -140,18 +171,15 @@ class LM:
         """ Make dummy variables from categorical variables. """
         dummies = []
         labels = []
-
         for k in range(x_cat.shape[1]):
             lab_k,lev_k = np.unique(x_cat.iloc[:,k],return_inverse=True)
             dum_k = np.eye(len(lab_k))[lev_k]
+            dum_k = dum_k[:,1:]
             dummies.append(dum_k)
-            labels.append( [x_cat.columns[k] +'_'+str(arr) for arr in lab_k ])
+            labels.append( [ x_cat.columns[k]+'_'+str(arr) for arr in lab_k ][1:] )
         dummies = np.concatenate(dummies,axis=1)
         labels = np.concatenate(labels)
         return dummies, labels
-
-
-
 
 
     def compute_se(self, se_type='', cluster_var = None):
