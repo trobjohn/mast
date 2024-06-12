@@ -8,18 +8,14 @@ class LM:
                  x_cat = None,
                  include_intercept=True):
         """ Initialize linear regression. """
-        # Detect vartype
-        self.var_types = x.dtypes
-
         # Create x_cat dummies and add to x
         if x_cat is None:
             self.vars_cat = None
         else:
             dummies, labels = self.make_dummies(x_cat)
-        
-        x = pd.concat([x,pd.DataFrame(data=dummies,columns=labels)],axis=1)
-
-        # Filter missings.
+            x = pd.concat([x,pd.DataFrame(data=dummies,columns=labels)],axis=1)
+        #
+        ## Filter missings.
         check_x = np.sum(np.isnan(x.to_numpy()),axis=1)
         check_y = np.isnan(y.to_numpy())
         keep_row = ( (check_x+check_y) == 0)

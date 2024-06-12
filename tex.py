@@ -25,7 +25,6 @@ class threeparttable:
         #   vars_list = reg_list[j].vars
         K = len(vars_list)
 
-
         # Track inference structure
         se_types = []
         se_types.append('Standard Errors:')
