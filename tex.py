@@ -67,9 +67,7 @@ class threeparttable:
         file = open(path+filename, "w")
 
         # Begin tabular
-        if size == 'tiny':
-            file.write('\\begin{tiny} \n')    
-
+        
         file.write('\\begin{table} \n')
         file.write('\\centering \n')
         file.write('\\begin{threeparttable}[t] \n')
@@ -77,7 +75,10 @@ class threeparttable:
         file.write('\\label{'+label+'} \n')
 
         # Begin table
-        file.write('\\renewcommand{\\arraystretch}{'+str(stretch)+'}')
+        file.write('\\renewcommand{\\arraystretch}{'+str(stretch)+'}')        
+        if not size is None:
+            file.write('\\begin{'+size+'+} \n')    
+
         file.write('\\begin{tabular}{'+(J+1)*'c'+'} ')
         file.write('\\hline \\hline \n')
 
@@ -177,11 +178,11 @@ class threeparttable:
         file.write('\\item Notes: ')
         file.write(''+additional_notes+stars_note+'\n')
         file.write('\\end{tablenotes} \n ')
+        if not size is None:
+            file.write('\\end{'+size+'+} \n')    
         file.write('\\end{threeparttable} \n')
         file.write('\\end{table} \n')
 
-        if size == 'tiny':
-            file.write('\\end{tiny} \n')   
 
         # Close file
         file.close()
