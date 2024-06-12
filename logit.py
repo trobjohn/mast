@@ -64,6 +64,8 @@ class Logit:
         self.y_hat = None
         #
         self.output = None
+        #
+        self.rsq = None
 
 
     def F_logit(self,z):
@@ -136,9 +138,18 @@ class Logit:
         beta_star[intercept] = beta_star[intercept] - np.sum( beta[selector]*mu_x[selector]/sigma_x[selector])
         self.beta = beta_star
         #
-        ## Set final values
+        ## Results
         self.latent = self.x @ self.beta
         self.y_hat = self.F_logit(self.latent)
+        residuals = self.y-self.y_hat # Compute residuals
+        self.sse =  np.inner(residuals,residuals) # Compute SSE
+        self.mse = self.sse/self.n
+        self.rmse = np.sqrt(self.mse)
+        self.ser = np.sum(self.sse)/(self.n-self.k) # Compute standard error of regression
+        tss = np.sum( ( self.y-np.mean(self.y) )**2 )
+        self.rsq = 1 - self.sse/tss 
+        self.residuals = residuals
+
 
     def make_dummies(self,x_cat):
         """ Make dummy variables from categorical variables. """

@@ -5,11 +5,13 @@ class threeparttable:
 
     def __init__(self, reg_list, 
         filename = 'reg.tex', 
-        path = './',
+        path = './results/',
         caption = 'Regression Table',
         label = 'tab:reg',
         stretch = 1.05,
-        additional_notes = ''):
+        additional_notes = '',
+        size = None,
+        format_names = True):
 
         """ Print regression tables to latex; requires threeparttable package. """
 
@@ -17,12 +19,14 @@ class threeparttable:
         real_formatter = "{:,.3f}".format
         int_formatter = "{:,.0f}".format
 
-        # Get the intersection of variables 
+        # Get the intersection of variables :: XXXXX
         J = len(reg_list)
         keep = 'intersection'
         vars_list = reg_list[0].vars
+        if format_names is True:
+            vars_list = [ (i.replace('_',' ')).title() for i in vars_list]
+
         #for j in range(J):
-        #   vars_list = reg_list[j].vars
         K = len(vars_list)
 
         # Track inference structure
@@ -35,20 +39,20 @@ class threeparttable:
         rbst = 0 
         clstr_rbst = 0
         
-        for k in range(K-1):
-            if k>0:
+        for j in range(J):
+            if j>0:
                 se_types.append(' & ')
-                se_types.append(reg_list[k-1].se_type)
-                if reg_list[k-1].se_type =='Robust':
+                se_types.append(reg_list[j-1].se_type)
+                if reg_list[j-1].se_type =='Robust':
                     rbst =1
                     se_N_clstr.append(' & ')
                     se_var_clstr.append(' & ')
-                elif reg_list[k-1].se_type =='Cluster-Robust':
+                elif reg_list[j-1].se_type =='Cluster-Robust':
                     clstr_rbst=1
                     se_N_clstr.append(' & ')
-                    se_N_clstr.append(int_formatter(reg_list[k-1].n_clusters))
+                    se_N_clstr.append(int_formatter(reg_list[j-1].n_clusters))
                     se_var_clstr.append(' & ')
-                    se_var_clstr.append(reg_list[k-1].cluster_varname)
+                    se_var_clstr.append(reg_list[j-1].cluster_varname)
                 else:
                     se_N_clstr.append(' & ')
                     se_var_clstr.append(' & ')
@@ -63,6 +67,9 @@ class threeparttable:
         file = open(path+filename, "w")
 
         # Begin tabular
+        if size == 'tiny':
+            file.write('\\begin{tiny} \n')    
+
         file.write('\\begin{table} \n')
         file.write('\\centering \n')
         file.write('\\begin{threeparttable}[t] \n')
@@ -71,18 +78,18 @@ class threeparttable:
 
         # Begin table
         file.write('\\renewcommand{\\arraystretch}{'+str(stretch)+'}')
-        file.write('\\begin{tabular}{'+K*'c'+'} ')
+        file.write('\\begin{tabular}{'+(J+1)*'c'+'} ')
         file.write('\\hline \\hline \n')
 
         # Title row
         title = []
         depvar = []
-        for k in range(K-1):
-            if k>0:
+        for j in range(J+1):
+            if j>0:
                 title.append(' & ')
-                title.append('('+str(k)+')')            
+                title.append('('+str(j)+')')            
                 depvar.append(' & ')
-                depvar.append('$\\mathrm{'+reg_list[k-1].depvar+'}$')            
+                depvar.append( (reg_list[j-1].depvar).replace('_',' ').title())            
         title.append('\\\\')
         depvar.append('\\\\')
         title_row = ''.join(title)
@@ -94,7 +101,7 @@ class threeparttable:
         # Point estimates and standard errors
         for k in range(K):
             est = []
-            est.append('$\\mathrm{'+vars_list[k]+'}$')
+            est.append(vars_list[k])
             se = []
             for j in range(J):
                 est.append(' & ')
@@ -163,7 +170,7 @@ class threeparttable:
 
         file.write('\\hline \n')
         # End tabular section:
-        file.write('\\end{tabular} \n \n')
+        file.write('\\end{tabular} \n ')
         # End notes:
         file.write('\\begin{tablenotes} \n')
         file.write('\small \n')
@@ -172,6 +179,9 @@ class threeparttable:
         file.write('\\end{tablenotes} \n ')
         file.write('\\end{threeparttable} \n')
         file.write('\\end{table} \n')
+
+        if size == 'tiny':
+            file.write('\\end{tiny} \n')   
 
         # Close file
         file.close()
